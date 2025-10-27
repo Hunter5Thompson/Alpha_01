@@ -1,16 +1,12 @@
 """Scientific writing module with Harvard citation style."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Dict
-
-from anthropic import Anthropic
-from openai import OpenAI
+from typing import Dict, List
 
 from .embeddings import embed_texts
-from .llm import ContextChunk, _get_anthropic, _get_openai
+from .llm import _get_anthropic, _get_openai
 from .rerank import RerankCandidate, rerank
 from .retrieval import RetrievedChunk, similarity_search
 from .settings import settings
@@ -220,7 +216,7 @@ def generate_scientific_section(
     """
     # Retrieve relevant sources
     query_embedding = embed_texts([topic])[0]
-    retrieved = similarity_search(query_embedding, k=num_sources)
+    retrieved = similarity_search(query_embedding, limit=num_sources)
 
     if not retrieved:
         return ScientificText(
