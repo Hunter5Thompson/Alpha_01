@@ -4,9 +4,11 @@ services:
   db:
     image: ankane/pgvector:latest
     environment:
-      POSTGRES_DB: ragdb
-      POSTGRES_USER: rag
-      POSTGRES_PASSWORD: ragpass
+      # SECURITY WARNING: Change these credentials in production!
+      # Use environment variables or Docker secrets for sensitive data
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_IN_PRODUCTION}
     ports:
       - "5432:5432"
     volumes:

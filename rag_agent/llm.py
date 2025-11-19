@@ -1,13 +1,17 @@
 """Answer generation via Anthropic or OpenAI."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Iterable, List
 
-from anthropic import Anthropic
-from openai import OpenAI
+from anthropic import Anthropic, APIError as AnthropicAPIError, APIConnectionError as AnthropicConnectionError, RateLimitError as AnthropicRateLimitError, APITimeoutError as AnthropicTimeoutError
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
 
+from .retry import retry_with_exponential_backoff
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,8 +60,32 @@ def _build_prompt(question: str, chunks: Iterable[ContextChunk]) -> str:
     return "\n".join(parts)
 
 
+@retry_with_exponential_backoff(
+    max_retries=3,
+    initial_delay=1.0,
+    retryable_exceptions=(
+        APIConnectionError, APITimeoutError, RateLimitError, APIError,
+        AnthropicConnectionError, AnthropicTimeoutError, AnthropicRateLimitError, AnthropicAPIError,
+    ),
+)
 def generate_answer(question: str, chunks: List[ContextChunk]) -> str:
+    """
+    Generate an answer to a question using context chunks.
+
+    Args:
+        question: The user's question
+        chunks: List of relevant context chunks
+
+    Returns:
+        Generated answer string
+
+    Raises:
+        RuntimeError: If API key is not configured
+        APIError: If API request fails after retries
+    """
     prompt = _build_prompt(question, chunks)
+    logger.debug("Generating answer for question with %d context chunks", len(chunks))
+
     if settings.llm_provider == "anthropic":
         client = _get_anthropic()
         message = client.messages.create(
@@ -80,4 +108,4 @@ def generate_answer(question: str, chunks: List[ContextChunk]) -> str:
     return completion.choices[0].message.content or ""
 
 
-__all__ = ["ContextChunk", "generate_answer"]
+__all__ = ["ContextChunk", "generate_answer", "_get_anthropic", "_get_openai"]

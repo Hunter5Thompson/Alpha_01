@@ -57,12 +57,32 @@ class Chunk:
 
 
 def chunk_text(doc_id: str, text: str) -> List[Chunk]:
+    """
+    Split text into chunks based on token limits with overlap.
+
+    Args:
+        doc_id: Document identifier
+        text: Text to chunk
+
+    Returns:
+        List of chunks
+
+    Raises:
+        ValueError: If text is empty or only whitespace
+    """
+    # Validate input
+    if not text or not text.strip():
+        raise ValueError(f"Cannot chunk empty or whitespace-only text for doc_id: {doc_id}")
+
     sentences = split_sentences(text)
     chunks = []
     for idx, content in enumerate(
         _chunk_tokens(sentences, settings.max_tokens, settings.overlap_tokens)
     ):
         chunks.append(Chunk(doc_id=doc_id, chunk_id=idx, content=content))
+
+    # Fallback for very short texts that don't produce chunks
     if not chunks and text.strip():
         chunks.append(Chunk(doc_id=doc_id, chunk_id=0, content=text.strip()))
+
     return chunks
