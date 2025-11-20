@@ -8,6 +8,7 @@ from .embeddings import embed_texts
 from .llm import ContextChunk, generate_answer
 from .rerank import RerankCandidate, rerank
 from .retrieval import RetrievedChunk, similarity_search
+from .settings import settings
 
 
 @dataclass
@@ -34,7 +35,7 @@ def answer_question(question: str) -> Answer:
     ranked = rerank(question, candidates)
     context_chunks = [
         ContextChunk(doc_id=item.doc_id, chunk_id=item.chunk_id, content=item.content)
-        for item in ranked[:3]
+        for item in ranked[:settings.rerank_top_k]
     ]
     answer = generate_answer(question, context_chunks)
     return Answer(text=answer, sources=[

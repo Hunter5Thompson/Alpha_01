@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Iterable, List, Sequence
 
-from openai import OpenAI
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
 
+from .retry import retry_with_exponential_backoff
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,16 +42,39 @@ _client: OpenAI | None = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        if not settings.has_embedding_credentials:
-            raise RuntimeError("OPENAI_API_KEY is required for reranking")
+        if not settings.openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is required for reranking. "
+                "Please set the OPENAI_API_KEY environment variable."
+            )
         _client = OpenAI(api_key=settings.openai_api_key)
     return _client
 
 
+@retry_with_exponential_backoff(
+    max_retries=3,
+    initial_delay=1.0,
+    retryable_exceptions=(APIConnectionError, APITimeoutError, RateLimitError, APIError),
+)
 def rerank(question: str, candidates: Sequence[RerankCandidate]) -> List[RerankCandidate]:
+    """
+    Rerank candidates using LLM-based scoring.
+
+    Args:
+        question: The search question
+        candidates: List of candidates to rerank
+
+    Returns:
+        Reranked list of candidates
+
+    Raises:
+        RuntimeError: If OpenAI API key is not configured
+        APIError: If API request fails after retries
+    """
     if not settings.needs_rerank or not candidates:
         return list(candidates)
 
+    logger.debug("Reranking %d candidates", len(candidates))
     client = _get_client()
     passages = [
         {
@@ -68,6 +95,7 @@ def rerank(question: str, candidates: Sequence[RerankCandidate]) -> List[RerankC
         data = json.loads(content)
         ranking = data.get("ranking", [])
     except json.JSONDecodeError:
+        logger.warning("Failed to parse reranking response, returning original order")
         return list(candidates)
 
     score_map = {

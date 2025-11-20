@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from .embeddings import embed_texts
 from .llm import _get_anthropic, _get_openai
@@ -69,7 +69,7 @@ class ScientificText:
     reference_list: str
 
 
-def _extract_metadata(chunk: RetrievedChunk) -> Dict[str, str]:
+def _extract_metadata(chunk: Union[RetrievedChunk, RerankCandidate]) -> Dict[str, str]:
     """Extract metadata for citations from chunk."""
     meta = chunk.meta or {}
     return {

@@ -13,6 +13,28 @@ def _get_bool(key: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_int(key: str, default: int, min_value: int | None = None) -> int:
+    """Get integer from environment with validation."""
+    value = os.getenv(key)
+    if value is None:
+        return default
+
+    try:
+        int_value = int(value.strip())
+    except (ValueError, AttributeError) as e:
+        raise ValueError(
+            f"Environment variable {key}='{value}' is not a valid integer. "
+            f"Using default: {default}"
+        ) from e
+
+    if min_value is not None and int_value < min_value:
+        raise ValueError(
+            f"Environment variable {key}={int_value} must be >= {min_value}"
+        )
+
+    return int_value
+
+
 def _get_list(key: str, default: List[str]) -> List[str]:
     value = os.getenv(key)
     if value is None:
@@ -37,10 +59,11 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "anthropic")
     llm_model: str = os.getenv("LLM_MODEL", "claude-3-7-sonnet-20250219")
     anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY")
-    max_tokens: int = int(os.getenv("MAX_TOKENS", "220"))
-    overlap_tokens: int = int(os.getenv("OVERLAP_TOKENS", "40"))
-    knn_k: int = int(os.getenv("RETRIEVAL_K", "8"))
-    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
+    max_tokens: int = _get_int("MAX_TOKENS", 220, min_value=1)
+    overlap_tokens: int = _get_int("OVERLAP_TOKENS", 40, min_value=0)
+    knn_k: int = _get_int("RETRIEVAL_K", 8, min_value=1)
+    rerank_top_k: int = _get_int("RERANK_TOP_K", 5, min_value=1)
+    max_file_size_mb: int = _get_int("MAX_FILE_SIZE_MB", 50, min_value=1)
     allowed_file_extensions: List[str] = _get_list(
         "ALLOWED_EXTENSIONS",
         [
@@ -83,3 +106,23 @@ class Settings:
 
 
 settings = Settings()
+
+
+# Validate settings after instantiation
+def _validate_settings() -> None:
+    """Validate settings for consistency."""
+    if settings.overlap_tokens >= settings.max_tokens:
+        raise ValueError(
+            f"OVERLAP_TOKENS ({settings.overlap_tokens}) must be less than "
+            f"MAX_TOKENS ({settings.max_tokens})"
+        )
+
+    # Validate file extensions start with dot
+    for ext in settings.allowed_file_extensions:
+        if not ext.startswith('.'):
+            raise ValueError(
+                f"File extension '{ext}' in ALLOWED_EXTENSIONS must start with a dot"
+            )
+
+
+_validate_settings()
